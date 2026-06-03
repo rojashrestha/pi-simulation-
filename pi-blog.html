@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Throwing Darts to Find π</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=IBM+Plex+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0f0e0b;
+    --paper: #f5f0e8;
+    --paper2: #ede7d7;
+    --accent: #c8401a;
+    --accent2: #2a6b8f;
+    --gold: #c9a84c;
+    --dot-inside: #c8401a;
+    --dot-outside: #2a6b8f;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 300;
+    overflow-x: hidden;
+  }
+
+  /* NOISE TEXTURE OVERLAY */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.5;
+  }
+
+  /* HERO */
+  .hero {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero-left {
+    background: var(--ink);
+    padding: 80px 60px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero-left::after {
+    content: 'π';
+    position: absolute;
+    bottom: -40px;
+    right: -20px;
+    font-family: 'Playfair Display', serif;
+    font-size: 320px;
+    font-weight: 900;
+    color: rgba(255,255,255,0.04);
+    line-height: 1;
+    pointer-events: none;
+  }
+
+  .tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 32px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease forwards 0.2s;
+  }
+
+  .hero-title {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(42px, 5vw, 72px);
+    font-weight: 900;
+    color: #fff;
+    line-height: 1.05;
+    margin-bottom: 24px;
+    opacity: 0;
+    animation: fadeUp 0.7s ease forwards 0.35s;
+  }
+
+  .hero-title em {
+    font-style: italic;
+    color: var(--accent);
+  }
+
+  .hero-sub {
+    font-size: 16px;
+    line-height: 1.7;
+    color: rgba(255,255,255,0.55);
+    max-width: 380px;
+    opacity: 0;
+    animation: fadeUp 0.7s ease forwards 0.5s;
+  }
+
+  .hero-meta {
+    margin-top: 48px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    opacity: 0;
+    animation: fadeUp 0.7s ease forwards 0.65s;
+  }
+
+  .hero-meta .divider { width: 40px; height: 1px; background: rgba(255,255,255,0.2); }
+
+  .hero-meta span {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: rgba(255,255,255,0.35);
+    letter-spacing: 0.1em;
+  }
+
+  /* SIMULATION CANVAS SIDE */
+  .hero-right {
+    background: var(--paper2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    position: relative;
+  }
+
+  .sim-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    opacity: 0;
+    animation: fadeUp 0.8s ease forwards 0.6s;
+  }
+
+  .sim-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: rgba(15,14,11,0.4);
+  }
+
+  canvas#dartCanvas {
+    border: 2px solid var(--ink);
+    display: block;
+    box-shadow: 8px 8px 0 var(--ink);
+  }
+
+  .pi-readout {
+    font-family: 'Playfair Display', serif;
+    font-size: 36px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .pi-readout span {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    color: rgba(15,14,11,0.45);
+    font-weight: 400;
+    display: block;
+    text-align: center;
+    margin-top: 4px;
+  }
+
+  .sim-btn {
+    background: var(--ink);
+    color: #fff;
+    border: none;
+    padding: 12px 32px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+  }
+
+  .sim-btn:hover { background: var(--accent); }
+  .sim-btn:active { transform: scale(0.97); }
+
+  /* ARTICLE BODY */
+  .article {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 80px 40px 120px;
+  }
+
+  .section {
+    margin-bottom: 72px;
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+
+  .section.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .section-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 16px;
+  }
+
+  h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(28px, 4vw, 42px);
+    font-weight: 700;
+    line-height: 1.15;
+    margin-bottom: 24px;
+    letter-spacing: -0.02em;
+  }
+
+  h2 em { font-style: italic; color: var(--accent2); }
+
+  p {
+    font-size: 17px;
+    line-height: 1.85;
+    color: #2a2824;
+    margin-bottom: 18px;
+  }
+
+  /* PULL QUOTE */
+  .pullquote {
+    border-left: 4px solid var(--accent);
+    padding: 20px 32px;
+    margin: 40px 0;
+    background: var(--paper2);
+  }
+
+  .pullquote p {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    font-style: italic;
+    line-height: 1.5;
+    margin: 0;
+    color: var(--ink);
+  }
+
+  /* TABLE */
+  .table-wrap {
+    overflow-x: auto;
+    margin: 32px 0;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+  }
+
+  thead tr {
+    background: var(--ink);
+    color: #fff;
+  }
+
+  thead th {
+    padding: 14px 20px;
+    text-align: left;
+    letter-spacing: 0.1em;
+    font-weight: 500;
+  }
+
+  tbody tr {
+    border-bottom: 1px solid rgba(15,14,11,0.1);
+    transition: background 0.15s;
+  }
+
+  tbody tr:hover { background: var(--paper2); }
+
+  tbody td {
+    padding: 14px 20px;
+    color: #3a3630;
+  }
+
+  tbody td:first-child { font-weight: 500; }
+
+  .td-good { color: var(--accent2); font-weight: 500; }
+  .td-better { color: var(--accent); font-weight: 500; }
+
+  /* USAGE GRID */
+  .usage-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 2px;
+    margin: 32px 0;
+  }
+
+  .usage-card {
+    background: var(--paper2);
+    padding: 28px 24px;
+    border-top: 3px solid var(--ink);
+    transition: border-color 0.2s, transform 0.2s;
+  }
+
+  .usage-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-3px);
+  }
+
+  .usage-icon {
+    font-size: 28px;
+    margin-bottom: 12px;
+    display: block;
+  }
+
+  .usage-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .usage-desc {
+    font-size: 13px;
+    line-height: 1.6;
+    color: rgba(15,14,11,0.6);
+    margin: 0;
+  }
+
+  /* FINALE */
+  .finale {
+    background: var(--ink);
+    color: #fff;
+    padding: 80px 60px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .finale::before {
+    content: '∞';
+    position: absolute;
+    font-family: 'Playfair Display', serif;
+    font-size: 600px;
+    font-weight: 900;
+    color: rgba(255,255,255,0.03);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    line-height: 1;
+  }
+
+  .finale h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(32px, 5vw, 60px);
+    font-weight: 900;
+    color: #fff;
+    margin-bottom: 24px;
+    position: relative;
+  }
+
+  .finale p {
+    max-width: 520px;
+    margin: 0 auto 16px;
+    color: rgba(255,255,255,0.65);
+    font-size: 18px;
+    position: relative;
+  }
+
+  .finale .big-stat {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(60px, 10vw, 120px);
+    font-weight: 900;
+    color: var(--accent);
+    line-height: 1;
+    margin: 40px 0 16px;
+    position: relative;
+  }
+
+  /* STAN STORY */
+  .story-block {
+    background: linear-gradient(135deg, #1a3a4f 0%, #0d2233 100%);
+    color: #fff;
+    padding: 48px 56px;
+    margin: 40px 0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .story-block::after {
+    content: '🎰';
+    position: absolute;
+    font-size: 120px;
+    bottom: -10px;
+    right: 20px;
+    opacity: 0.15;
+  }
+
+  .story-block .section-label {
+    color: var(--gold);
+  }
+
+  .story-block h2 { color: #fff; }
+  .story-block p { color: rgba(255,255,255,0.75); }
+
+  /* ANIMATIONS */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* RESPONSIVE */
+  @media (max-width: 768px) {
+    .hero { grid-template-columns: 1fr; }
+    .hero-left { padding: 60px 32px; min-height: 70vh; }
+    .hero-right { min-height: 50vh; padding: 40px 24px; }
+    .article { padding: 60px 24px 80px; }
+    .finale { padding: 60px 32px; }
+    .story-block { padding: 40px 32px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-left">
+    <div class="tag">Monte Carlo Method · Mathematics · Probability</div>
+    <h1 class="hero-title">Throwing<br>Darts to<br>Find <em>π</em></h1>
+    <p class="hero-sub">How throwing random dots can solve math problems — without being a genius.</p>
+    <div class="hero-meta">
+      <div class="divider"></div>
+      <span>5 min read</span>
+      <div class="divider"></div>
+      
+    </div>
+  </div>
+
+  <div class="hero-right">
+    <div class="sim-wrapper">
+      <div class="sim-label">Live Simulation</div>
+      <canvas id="dartCanvas" width="300" height="300"></canvas>
+      <div class="pi-readout">
+        π ≈ <span id="piVal">—</span>
+        <span id="dotCount">Throw some darts to start</span>
+      </div>
+      <button class="sim-btn" id="throwBtn">Throw 500 Darts</button>
+    </div>
+  </div>
+</section>
+
+<!-- ARTICLE -->
+<article class="article">
+
+  <!-- SECTION 1 -->
+  <div class="section">
+    <div class="section-label">01 — The Weird Idea</div>
+    <h2>What if you just… <em>threw stuff</em>?</h2>
+    <p>Let's say you forgot the formula for the area of a circle. No problem. Just draw a square, put a circle inside it, throw lots of random dots at the square, and count how many land inside the circle.</p>
+    <p>That's it. That number can tell you the area of the circle — and even the famous number π (3.14…). No magic. Just counting.</p>
+
+    <div class="pullquote">
+      <p>"The circle takes up some fraction of the square. Count the dots. Do the math. Done."</p>
+    </div>
+
+    <p>If you throw 100 dots and 78 land in the circle, that's 78%. The circle's area is about 78% of the square's area. Since you know the square's area (length × width), you now know the circle's area — and from that, you can calculate π.</p>
+  </div>
+
+  <!-- SECTION 2: STAN STORY -->
+  <div class="section">
+    <div class="story-block">
+      <div class="section-label">02 — The Origin Story</div>
+      <h2>The Man Sick in Bed</h2>
+      <p>A scientist named Stan Ulam was sick in bed, playing cards. He wondered: what's the chance I'll win this game? Instead of doing hard math, he thought — why not just play the game millions of times in my head and count wins and losses?</p>
+      <p>That's exactly what Monte Carlo simulation does. Repeat something random many, many times and see what happens. They named it after a casino in Monaco called Monte Carlo — because it's all about chance.</p>
+    </div>
+  </div>
+
+  <!-- SECTION 3: TABLE -->
+  <div class="section">
+    <div class="section-label">03 — Does It Work?</div>
+    <h2>More darts = <em>better answer</em></h2>
+    <p>Kinda. But more dots means a better answer. Here's the catch: to get twice as accurate, you need four times more dots. So it's slow — but it works.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Darts Thrown</th>
+            <th>Accuracy</th>
+            <th>How Close?</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>100</td>
+            <td>~2 decimal places</td>
+            <td>Close enough</td>
+          </tr>
+          <tr>
+            <td>1,000</td>
+            <td>~3 decimal places</td>
+            <td class="td-good">Getting better</td>
+          </tr>
+          <tr>
+            <td>10,000</td>
+            <td>~4 decimal places</td>
+            <td class="td-better">Pretty good</td>
+          </tr>
+          <tr>
+            <td>1,000,000</td>
+            <td>~5–6 decimal places</td>
+            <td class="td-better">Really, really good</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>This method works even for super hard problems — like shapes in 100 dimensions (don't worry, nobody can picture those either). Normal math gives up. Monte Carlo just throws more dots.</p>
+  </div>
+
+  <!-- SECTION 4: USES -->
+  <div class="section">
+    <div class="section-label">04 — Real Life Uses</div>
+    <h2>Where randomness<br>becomes reliable</h2>
+    <p>It sounds absurd. But this technique powers some of the most important technology in the world.</p>
+
+    <div class="usage-grid">
+      <div class="usage-card">
+        <span class="usage-icon">🌧️</span>
+        <div class="usage-title">Weather Forecasts</div>
+        <p class="usage-desc">Showing how confident we are about rain, snow, or sunshine tomorrow.</p>
+      </div>
+      <div class="usage-card">
+        <span class="usage-icon">🎮</span>
+        <div class="usage-title">Game AI</div>
+        <p class="usage-desc">AlphaGo used Monte Carlo to beat world champions at the game of Go.</p>
+      </div>
+      <div class="usage-card">
+        <span class="usage-icon">💊</span>
+        <div class="usage-title">Medicine</div>
+        <p class="usage-desc">Simulating how new drugs might behave inside the human body.</p>
+      </div>
+      <div class="usage-card">
+        <span class="usage-icon">🚀</span>
+        <div class="usage-title">Rockets</div>
+        <p class="usage-desc">Estimating how likely a rocket is to succeed — or fail — before launch.</p>
+      </div>
+    </div>
+  </div>
+
+</article>
+
+<!-- FINALE -->
+<div class="finale">
+  <div class="big-stat">π</div>
+  <h2>Every dart is dumb.<br>A million darts are smart.</h2>
+  <p>You don't always need the perfect answer. Sometimes a good enough answer is fine.</p>
+  <p>And randomness, when you do it millions of times, stops being random. It becomes reliable.</p>
+  <p style="margin-top: 32px; color: rgba(255,255,255,0.35); font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.15em;">YESKO BLOG · MATHEMATICS MADE SIMPLE</p>
+</div>
+
+<script>
+  // ---- DART SIMULATION ----
+  const canvas = document.getElementById('dartCanvas');
+  const ctx = canvas.getContext('2d');
+  const piVal = document.getElementById('piVal');
+  const dotCount = document.getElementById('dotCount');
+  const btn = document.getElementById('throwBtn');
+
+  let inside = 0, total = 0;
+  const W = canvas.width, H = canvas.height;
+  const cx = W / 2, cy = H / 2, r = W / 2;
+
+  function drawBase() {
+    ctx.clearRect(0, 0, W, H);
+    // Square bg
+    ctx.fillStyle = '#f5f0e8';
+    ctx.fillRect(0, 0, W, H);
+    // Circle
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(42, 107, 143, 0.08)';
+    ctx.fill();
+    ctx.strokeStyle = '#2a6b8f';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // Square border
+    ctx.strokeStyle = '#0f0e0b';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(1, 1, W - 2, H - 2);
+  }
+
+  function throwDarts(n) {
+    drawBase();
+    // Redraw all previous dots would be expensive; use layer approach
+    // For simplicity, just draw new batch on top
+    for (let i = 0; i < n; i++) {
+      const x = Math.random() * W;
+      const y = Math.random() * H;
+      const dx = x - cx, dy = y - cy;
+      const isIn = dx * dx + dy * dy <= r * r;
+      if (isIn) inside++;
+      total++;
+      ctx.beginPath();
+      ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = isIn ? 'rgba(200,64,26,0.75)' : 'rgba(42,107,143,0.6)';
+      ctx.fill();
+    }
+    const estimate = (4 * inside / total).toFixed(5);
+    piVal.textContent = estimate;
+    dotCount.textContent = `${total.toLocaleString()} darts thrown`;
+  }
+
+  // Initial draw
+  drawBase();
+
+  btn.addEventListener('click', () => {
+    throwDarts(500);
+    if (total >= 5000) btn.textContent = 'Throw 500 More';
+  });
+
+  // ---- SCROLL REVEAL ----
+  const sections = document.querySelectorAll('.section');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.classList.add('visible');
+        observer.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.12 });
+  sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
